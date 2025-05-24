@@ -469,8 +469,6 @@
 
 
 
-
-import os
 import pandas as pd
 import requests
 import streamlit as st
@@ -482,7 +480,6 @@ from email.mime.multipart import MIMEMultipart
 # Constants
 BASE_URL = "https://gainblers.com/la/tipsters/latambet/pronosticos/"
 EXCEL_FILE = "predictions.xlsx"
-NOTIFIED_FILE = "notified_alerts.txt"
 HEADERS = {
     "User-Agent": "Mozilla/5.0"
 }
@@ -506,20 +503,10 @@ def send_email_alert(subject, body):
 
 # Load/Save Functions
 def load_existing_data():
-    if os.path.exists(EXCEL_FILE):
+    try:
         return pd.read_excel(EXCEL_FILE)
-    return pd.DataFrame(columns=["Event", "Country", "Date", "Status"])
-
-def load_notified():
-    if os.path.exists(NOTIFIED_FILE):
-        with open(NOTIFIED_FILE, "r") as f:
-            return set(line.strip() for line in f.readlines())
-    return set()
-
-def save_notified(new_alerts):
-    with open(NOTIFIED_FILE, "a") as f:
-        for alert in new_alerts:
-            f.write(alert + "\n")
+    except FileNotFoundError:
+        return pd.DataFrame(columns=["Event", "Country", "Date", "Status"])
 
 def parse_date(date_str):
     return date_str.strip()
@@ -528,10 +515,12 @@ def parse_date(date_str):
 def scrape_data():
     status_log = []
     existing_data = load_existing_data()
-    notified_set = load_notified()
-
     new_data = []
     new_pending_alerts = []
+
+    # Initialize notified alerts in session state if not exists
+    if "notified_set" not in st.session_state:
+        st.session_state.notified_set = set()
 
     try:
         response = requests.get(BASE_URL, headers=HEADERS)
@@ -552,7 +541,8 @@ def scrape_data():
 
                 pick_div = picks[i]
                 status = "Pendiente" if "Pendiente" in pick_div.text else "Other"
-
+                
+                # Check duplicate in existing data
                 is_duplicate = (
                     (existing_data["Event"] == event_name) &
                     (existing_data["Country"] == country) &
@@ -560,22 +550,26 @@ def scrape_data():
                     (existing_data["Status"] == status)
                 ).any()
 
-                alert_key = f"{event_name} - {country} - {event_date}"
-
                 if not is_duplicate:
                     new_data.append([event_name, country, event_date, status])
-                    if status == "Pendiente" and alert_key not in notified_set:
-                        new_pending_alerts.append(alert_key)
+                    if status == "Pendiente":
+                        alert_key = f"{event_name} - {country} - {event_date}"
+                        # Add only if not already notified in this session
+                        if alert_key not in st.session_state.notified_set:
+                            new_pending_alerts.append(alert_key)
 
             except Exception as e:
                 status_log.append(f"⚠️ Error parsing row {i}: {e}")
 
+        # Send email only for new alerts not notified yet
         if new_pending_alerts:
             alert_body = "New 'Pendiente' predictions found:\n\n" + "\n".join(new_pending_alerts) + f"\n\nURL: {BASE_URL}"
             send_email_alert("Pendiente Alert from Gainblers", alert_body)
-            save_notified(new_pending_alerts)
             status_log.append(f"✅ Sent email for {len(new_pending_alerts)} new 'Pendiente' predictions")
+            # Mark these as notified
+            st.session_state.notified_set.update(new_pending_alerts)
 
+        # Save updated data
         if new_data:
             updated_df = pd.concat([existing_data, pd.DataFrame(new_data, columns=existing_data.columns)], ignore_index=True)
             updated_df.drop_duplicates(inplace=True)
@@ -595,7 +589,6 @@ st.set_page_config(page_title="Gainblers Scraper", layout="centered")
 st.title("🔎 Gainblers Scraper")
 st.markdown("This scraper runs automatically when the page is loaded (useful for UptimeRobot pinging).")
 
-# Run on load
 with st.spinner("Scraping in progress..."):
     logs = scrape_data()
 
@@ -603,6 +596,7 @@ st.success("✅ Done")
 st.markdown("### Logs:")
 for log in logs:
     st.write(log)
+
 
 
 
