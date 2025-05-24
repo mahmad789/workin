@@ -468,7 +468,7 @@
 
 
 
-
+import os
 import pandas as pd
 import requests
 import streamlit as st
@@ -485,7 +485,7 @@ HEADERS = {
 }
 
 SENDER_EMAIL = "testingformerightnow@gmail.com"
-RECEIVER_EMAIL = "nikolab96@yahoo.com"
+RECEIVER_EMAIL = "ahmadmubashir9009@gmail.com"
 EMAIL_PASSWORD = "jzvq wyhk xrkp qynt"
 
 # Email Notification
@@ -501,26 +501,24 @@ def send_email_alert(subject, body):
         server.login(SENDER_EMAIL, EMAIL_PASSWORD)
         server.send_message(message)
 
-# Load/Save Functions
+# Load existing Excel data or create empty DataFrame
 def load_existing_data():
-    try:
-        return pd.read_excel(EXCEL_FILE)
-    except FileNotFoundError:
+    if os.path.exists(EXCEL_FILE):
+        try:
+            return pd.read_excel(EXCEL_FILE)
+        except Exception as e:
+            return pd.DataFrame(columns=["Event", "Country", "Date", "Status"])
+    else:
         return pd.DataFrame(columns=["Event", "Country", "Date", "Status"])
 
 def parse_date(date_str):
     return date_str.strip()
 
-# Main Scraper
 def scrape_data():
     status_log = []
     existing_data = load_existing_data()
     new_data = []
     new_pending_alerts = []
-
-    # Initialize notified alerts in session state if not exists
-    if "notified_set" not in st.session_state:
-        st.session_state.notified_set = set()
 
     try:
         response = requests.get(BASE_URL, headers=HEADERS)
@@ -541,33 +539,29 @@ def scrape_data():
 
                 pick_div = picks[i]
                 status = "Pendiente" if "Pendiente" in pick_div.text else "Other"
-                
-                # Check duplicate in existing data
-                is_duplicate = (
+
+                # Check if this record already exists in Excel file
+                exists = (
                     (existing_data["Event"] == event_name) &
                     (existing_data["Country"] == country) &
                     (existing_data["Date"] == event_date) &
                     (existing_data["Status"] == status)
                 ).any()
 
-                if not is_duplicate:
+                if not exists:
                     new_data.append([event_name, country, event_date, status])
+                    # Only alert if status is Pendiente and not already in existing_data
                     if status == "Pendiente":
-                        alert_key = f"{event_name} - {country} - {event_date}"
-                        # Add only if not already notified in this session
-                        if alert_key not in st.session_state.notified_set:
-                            new_pending_alerts.append(alert_key)
+                        new_pending_alerts.append(f"{event_name} - {country} - {event_date}")
 
             except Exception as e:
                 status_log.append(f"⚠️ Error parsing row {i}: {e}")
 
-        # Send email only for new alerts not notified yet
+        # Send email alert only if there are new "Pendiente" alerts
         if new_pending_alerts:
             alert_body = "New 'Pendiente' predictions found:\n\n" + "\n".join(new_pending_alerts) + f"\n\nURL: {BASE_URL}"
             send_email_alert("Pendiente Alert from Gainblers", alert_body)
             status_log.append(f"✅ Sent email for {len(new_pending_alerts)} new 'Pendiente' predictions")
-            # Mark these as notified
-            st.session_state.notified_set.update(new_pending_alerts)
 
         # Save updated data
         if new_data:
@@ -584,7 +578,7 @@ def scrape_data():
 
     return status_log
 
-# Streamlit App
+# Streamlit UI
 st.set_page_config(page_title="Gainblers Scraper", layout="centered")
 st.title("🔎 Gainblers Scraper")
 st.markdown("This scraper runs automatically when the page is loaded (useful for UptimeRobot pinging).")
@@ -596,7 +590,6 @@ st.success("✅ Done")
 st.markdown("### Logs:")
 for log in logs:
     st.write(log)
-
 
 
 
