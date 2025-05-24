@@ -346,6 +346,130 @@
 
 
 
+# import os
+# import pandas as pd
+# import requests
+# import streamlit as st
+# from bs4 import BeautifulSoup
+# import smtplib
+# from email.mime.text import MIMEText
+# from email.mime.multipart import MIMEMultipart
+
+# # Constants
+# BASE_URL = "https://gainblers.com/la/tipsters/latambet/pronosticos/"
+# EXCEL_FILE = "predictions.xlsx"
+# HEADERS = {
+#     "User-Agent": "Mozilla/5.0"
+# }
+
+# SENDER_EMAIL = "testingformerightnow@gmail.com"
+# RECEIVER_EMAIL = "nikolab96@yahoo.com"
+# EMAIL_PASSWORD = "jzvq wyhk xrkp qynt"
+
+# # Email Notification
+# def send_email_alert(subject, body):
+#     message = MIMEMultipart()
+#     message["From"] = SENDER_EMAIL
+#     message["To"] = RECEIVER_EMAIL
+#     message["Subject"] = subject
+#     message.attach(MIMEText(body, "plain"))
+
+#     with smtplib.SMTP("smtp.gmail.com", 587) as server:
+#         server.starttls()
+#         server.login(SENDER_EMAIL, EMAIL_PASSWORD)
+#         server.send_message(message)
+
+# # Load/Save Functions
+# def load_existing_data():
+#     if os.path.exists(EXCEL_FILE):
+#         return pd.read_excel(EXCEL_FILE)
+#     return pd.DataFrame(columns=["Event", "Country", "Date", "Status"])
+
+# def parse_date(date_str):
+#     return date_str.strip()
+
+# # Main Scraper
+# def scrape_data():
+#     status_log = []
+#     existing_data = load_existing_data()
+#     new_data = []
+#     new_pending_alerts = []
+
+#     try:
+#         response = requests.get(BASE_URL, headers=HEADERS)
+#         if response.status_code != 200:
+#             status_log.append(f"❌ Failed to fetch page: {response.status_code}")
+#             return status_log
+
+#         soup = BeautifulSoup(response.text, "html.parser")
+#         rows = soup.find_all("div", class_="td flex7 f-row td-event-with-calendar")
+#         picks = soup.find_all("li", class_="tr part")
+
+#         for i, row in enumerate(rows):
+#             try:
+#                 event_name = row.find("p", class_="event").text.replace("Pronóstico", "").strip()
+#                 country = row.find("p", class_="league").text.strip()
+#                 date_str = row.find("span", class_="calendar").text.strip()
+#                 event_date = parse_date(date_str)
+
+#                 pick_div = picks[i]
+#                 status = "Pendiente" if "Pendiente" in pick_div.text else "Other"
+                
+#                 is_duplicate = (
+#                     (existing_data["Event"] == event_name) &
+#                     (existing_data["Country"] == country) &
+#                     (existing_data["Date"] == event_date) &
+#                     (existing_data["Status"] == status)
+#                 ).any()
+
+#                 if not is_duplicate:
+#                     new_data.append([event_name, country, event_date, status])
+#                     if status == "Pendiente":
+#                         new_pending_alerts.append(f"{event_name} - {country} - {event_date}")
+
+#             except Exception as e:
+#                 status_log.append(f"⚠️ Error parsing row {i}: {e}")
+
+#         if new_pending_alerts:
+#             alert_body = "New 'Pendiente' predictions found:\n\n" + "\n".join(new_pending_alerts) + f"\n\nURL: {BASE_URL}"
+#             send_email_alert("Pendiente Alert from Gainblers", alert_body)
+#             status_log.append(f"✅ Sent email for {len(new_pending_alerts)} new 'Pendiente' predictions")
+
+#         # Save data
+#         if new_data:
+#             updated_df = pd.concat([existing_data, pd.DataFrame(new_data, columns=existing_data.columns)], ignore_index=True)
+#             updated_df.drop_duplicates(inplace=True)
+#             updated_df.to_excel(EXCEL_FILE, index=False)
+#             status_log.append(f"💾 Saved {len(new_data)} new records to Excel")
+
+#         if not new_data:
+#             status_log.append("ℹ️ No new data found.")
+
+#     except Exception as e:
+#         status_log.append(f"❌ Error during scraping: {e}")
+
+#     return status_log
+
+
+# # Streamlit App
+# st.set_page_config(page_title="Gainblers Scraper", layout="centered")
+# st.title("🔎 Gainblers Scraper")
+# st.markdown("This scraper runs automatically when the page is loaded (useful for UptimeRobot pinging).")
+
+# # Run on load
+# with st.spinner("Scraping in progress..."):
+#     logs = scrape_data()
+
+# st.success("✅ Done")
+# st.markdown("### Logs:")
+# for log in logs:
+#     st.write(log)
+
+
+
+
+
+
 import os
 import pandas as pd
 import requests
@@ -358,6 +482,7 @@ from email.mime.multipart import MIMEMultipart
 # Constants
 BASE_URL = "https://gainblers.com/la/tipsters/latambet/pronosticos/"
 EXCEL_FILE = "predictions.xlsx"
+NOTIFIED_FILE = "notified_alerts.txt"
 HEADERS = {
     "User-Agent": "Mozilla/5.0"
 }
@@ -385,6 +510,17 @@ def load_existing_data():
         return pd.read_excel(EXCEL_FILE)
     return pd.DataFrame(columns=["Event", "Country", "Date", "Status"])
 
+def load_notified():
+    if os.path.exists(NOTIFIED_FILE):
+        with open(NOTIFIED_FILE, "r") as f:
+            return set(line.strip() for line in f.readlines())
+    return set()
+
+def save_notified(new_alerts):
+    with open(NOTIFIED_FILE, "a") as f:
+        for alert in new_alerts:
+            f.write(alert + "\n")
+
 def parse_date(date_str):
     return date_str.strip()
 
@@ -392,6 +528,8 @@ def parse_date(date_str):
 def scrape_data():
     status_log = []
     existing_data = load_existing_data()
+    notified_set = load_notified()
+
     new_data = []
     new_pending_alerts = []
 
@@ -414,7 +552,7 @@ def scrape_data():
 
                 pick_div = picks[i]
                 status = "Pendiente" if "Pendiente" in pick_div.text else "Other"
-                
+
                 is_duplicate = (
                     (existing_data["Event"] == event_name) &
                     (existing_data["Country"] == country) &
@@ -422,10 +560,12 @@ def scrape_data():
                     (existing_data["Status"] == status)
                 ).any()
 
+                alert_key = f"{event_name} - {country} - {event_date}"
+
                 if not is_duplicate:
                     new_data.append([event_name, country, event_date, status])
-                    if status == "Pendiente":
-                        new_pending_alerts.append(f"{event_name} - {country} - {event_date}")
+                    if status == "Pendiente" and alert_key not in notified_set:
+                        new_pending_alerts.append(alert_key)
 
             except Exception as e:
                 status_log.append(f"⚠️ Error parsing row {i}: {e}")
@@ -433,9 +573,9 @@ def scrape_data():
         if new_pending_alerts:
             alert_body = "New 'Pendiente' predictions found:\n\n" + "\n".join(new_pending_alerts) + f"\n\nURL: {BASE_URL}"
             send_email_alert("Pendiente Alert from Gainblers", alert_body)
+            save_notified(new_pending_alerts)
             status_log.append(f"✅ Sent email for {len(new_pending_alerts)} new 'Pendiente' predictions")
 
-        # Save data
         if new_data:
             updated_df = pd.concat([existing_data, pd.DataFrame(new_data, columns=existing_data.columns)], ignore_index=True)
             updated_df.drop_duplicates(inplace=True)
@@ -449,7 +589,6 @@ def scrape_data():
         status_log.append(f"❌ Error during scraping: {e}")
 
     return status_log
-
 
 # Streamlit App
 st.set_page_config(page_title="Gainblers Scraper", layout="centered")
