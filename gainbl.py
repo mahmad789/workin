@@ -363,7 +363,7 @@ HEADERS = {
 }
 
 SENDER_EMAIL = "testingformerightnow@gmail.com"
-RECEIVER_EMAIL = "ahmadmubashir9009@gmail.com"
+RECEIVER_EMAIL = "nikolab96@yahoo.com"
 EMAIL_PASSWORD = "jzvq wyhk xrkp qynt"
 
 # Email Notification
