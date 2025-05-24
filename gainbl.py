@@ -415,12 +415,12 @@ def scrape_data():
                 pick_div = picks[i]
                 status = "Pendiente" if "Pendiente" in pick_div.text else "Other"
                 is_duplicate = False
-                is_duplicate = (
-                    (existing_data["Event"] == event_name) &
-                    (existing_data["Country"] == country) &
-                    (existing_data["Date"] == event_date) &
-                    (existing_data["Status"] == status)
-                ).any()
+                # is_duplicate = (
+                #     (existing_data["Event"] == event_name) &
+                #     (existing_data["Country"] == country) &
+                #     (existing_data["Date"] == event_date) &
+                #     (existing_data["Status"] == status)
+                # ).any()
 
                 if not is_duplicate:
                     new_data.append([event_name, country, event_date, status])
