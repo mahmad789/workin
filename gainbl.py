@@ -363,7 +363,7 @@ HEADERS = {
 }
 
 SENDER_EMAIL = "testingformerightnow@gmail.com"
-RECEIVER_EMAIL = "nikolab96@yahoo.com"
+RECEIVER_EMAIL = "ahmadmubashir9009.com"
 EMAIL_PASSWORD = "jzvq wyhk xrkp qynt"
 
 # Email Notification
@@ -414,7 +414,7 @@ def scrape_data():
 
                 pick_div = picks[i]
                 status = "Pendiente" if "Pendiente" in pick_div.text else "Other"
-
+                is_duplicate = False
                 is_duplicate = (
                     (existing_data["Event"] == event_name) &
                     (existing_data["Country"] == country) &
